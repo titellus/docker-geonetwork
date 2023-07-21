@@ -1,0 +1,43 @@
+# To test scaling of the geonetwork service.
+# mkdir -p /tmp/geonetwork/ha/data
+# execute: docker-compose --verbose -f docker-compose.yml -f docker-compose.scaled.yml up --scale geonetwork=3 geonetwork -d
+# then, open: http://localhost:{8085-8088}/
+# open all scaled geonetworks in one go:
+# > docker ps --format json --filter "name=geonetwork" | jq ".Ports" | sed -E "s/.*:([0-9]{4})->.*/http:\/\/localhost:\1/" | while read -r url; do xdg-open "$url"; done
+volumes:
+  pgdata:
+  pglog:
+  esdata:
+  geonetworkdata:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/tmp/geonetwork/ha/data'
+services:
+  database:
+    ports:
+      - "5433:5433"
+  geonetwork:
+    environment:
+      JAVA_OPTS: >
+        -Dorg.eclipse.jetty.annotations.AnnotationParser.LEVEL=OFF
+        -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true
+        -Xms512M -Xss512M -Xmx2G -XX:+UseConcMarkSweepGC
+        -Dgeonetwork.dir=/geonetwork-data
+        -Dgeonetwork.codeList.dir=/opt/geonetwork/WEB-INF/data/config/codelist
+        -Dgeonetwork.schema.dir=/opt/geonetwork/WEB-INF/data/config/schema_plugins
+        -Dgeonetwork.htmlcache.dir=/tmp/geonetwork/ha/htmlcache
+        -Des.protocol=http
+        -Des.host=elasticsearch
+        -Des.port=9200
+        -Des.url=http://elasticsearch:9200
+        -Dgeonetwork.ESFeaturesProxy.targetUri=http://elasticsearch:9200/geo-features/{_}
+        -Dgeonetwork.HttpDashboardProxy.targetUri=http://kibana:5601
+        -Dgeonetwork.MicroServicesProxy.targetUri=http://ogc-api-records-service:8080
+    ports:
+      - "8087-8090:8080"
+    volumes:
+      - geonetworkdata:/geonetwork-data
+    networks:
+      - gn-network
